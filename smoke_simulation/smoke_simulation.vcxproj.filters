@@ -1,0 +1,88 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="host">
+      <UniqueIdentifier>{dda8dba0-e089-4d5e-877b-0f72a14db2e2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="cuda">
+      <UniqueIdentifier>{45911d09-2f6c-4ff9-a243-63ab22a64c6a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="parameters">
+      <UniqueIdentifier>{d00d0e7b-a94f-4d2b-99d2-caa259b5855c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ui">
+      <UniqueIdentifier>{8695e54e-e007-4513-82d2-cc66eda82bda}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="shaders">
+      <UniqueIdentifier>{f92a92d6-38ad-4731-97bb-5689bdb220d9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="extras">
+      <UniqueIdentifier>{e4a214b6-cf14-4d44-8e4d-838f94790467}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Source.cpp">
+      <Filter>host</Filter>
+    </ClCompile>
+    <ClCompile Include="..\glad\src\glad.c">
+      <Filter>host</Filter>
+    </ClCompile>
+    <ClCompile Include="Shader.cpp">
+      <Filter>shaders</Filter>
+    </ClCompile>
+    <ClCompile Include="param.cpp">
+      <Filter>parameters</Filter>
+    </ClCompile>
+    <ClCompile Include="ui.cpp">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui-1.91.1\imgui.cpp">
+      <Filter>extras</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui-1.91.1\imgui_demo.cpp">
+      <Filter>extras</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui-1.91.1\imgui_draw.cpp">
+      <Filter>extras</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui-1.91.1\imgui_tables.cpp">
+      <Filter>extras</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui-1.91.1\imgui_widgets.cpp">
+      <Filter>extras</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui-1.91.1\backends\imgui_impl_opengl3.cpp">
+      <Filter>extras</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui-1.91.1\backends\imgui_impl_glfw.cpp">
+      <Filter>extras</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="shader.h">
+      <Filter>shaders</Filter>
+    </ClInclude>
+    <ClInclude Include="cuda.h">
+      <Filter>cuda</Filter>
+    </ClInclude>
+    <ClInclude Include="param.h">
+      <Filter>parameters</Filter>
+    </ClInclude>
+    <ClInclude Include="ui.h">
+      <Filter>ui</Filter>
+    </ClInclude>
+    <ClInclude Include="host.h">
+      <Filter>host</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="build_cuda.bat">
+      <Filter>cuda</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="cuda.cu">
+      <Filter>cuda</Filter>
+    </CudaCompile>
+  </ItemGroup>
+</Project>
