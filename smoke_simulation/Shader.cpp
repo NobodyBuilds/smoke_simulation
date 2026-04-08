@@ -30,7 +30,7 @@ const char* fragmentShaderSource = "#version 330 core\n"
 
 
 
-"if(val ==0){"
-"   FragColor = vec4(val,val,val, 1.0f);}\n"
-"else{FragColor=vec4(val+pos.x,val+pos.y,val+pos.z, 1.0f);}"
+//"if(val ==0){"
+"   FragColor = vec4(val+0.1f,val+0.1f,val+0.1f, 1.0f);\n"
+//"else{FragColor=vec4(val+pos.x,val+pos.y,val+pos.z, 1.0f);}"
 "}\n\0";

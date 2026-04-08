@@ -10,7 +10,11 @@ void debug() {
 	if (ImGui::DragFloat("Tile Size: %.1f", &settings.tilesize, 0.1f, 1.0f, 900.0f)){
 		restart();
 	}
-
+	ImGui::InputFloat("SOR: %.2f", &settings.sor, 0.1f, 10.0f);
+	ImGui::DragFloat("density: %.1f", &settings.density, 0.1f, 0.1f, 10.0f);
+	ImGui::InputInt("Iterations", &settings.itters, 1, 100);
+	ImGui::InputFloat("viscosity", &settings.visc, 0.0001f, 0.01f);
+	ImGui::InputFloat("vorticity", &settings.vorticity, 1.0f, 100.0f);
 	ImGui::End();
 }
 
@@ -23,8 +27,9 @@ extern "C" void ui() {
 	ImGui::SetNextWindowPos(ImVec2(10, 10));
 	ImGui::SetNextWindowSize(ImVec2(200, 60));
 	ImGui::Begin("Overlay", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar);
-	ImGui::Text("FPS: %.1f", settings.fps);
+	ImGui::Text("FPS: %.1f", settings.avgFps);
 	ImGui::Text("Frame Time: %.2f ms", settings.fuc_ms);
+	ImGui::Text("error: %d", settings.diverror);
 	ImGui::End();
 
 	debug();

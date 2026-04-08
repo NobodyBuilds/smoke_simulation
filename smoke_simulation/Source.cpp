@@ -1,4 +1,4 @@
-#include <GLAD/glad.h>
+﻿#include <GLAD/glad.h>
 #include <GLFW/glfw3.h>
 #include "shader.h"
 #include <vector>
@@ -19,8 +19,11 @@ void processInput(GLFWwindow* window);
 const unsigned int SCR_WIDTH = 1000;
 const unsigned int SCR_HEIGHT = 900;
 
+int currentW = SCR_WIDTH;
+int currentH = SCR_HEIGHT;
 double mousex, mousey;
-
+double prevmousex = 0, prevmousey = 0;
+double dmx = 0, dmy = 0;
 const float fixeddt = 1.0f / 120.0f;
 
     
@@ -32,22 +35,257 @@ const float fixeddt = 1.0f / 120.0f;
 
 
 
-	 std::vector<float> data(w* h, 0.0f);
+	 std::vector<float> density(w* h, 0.0f);
+std::vector<float> velocityx(w * h , 0.0f); // 2 components for velocity x
+std::vector<float> velocityy(w * h , 0.0f); // 2 components for velocity y
+std::vector<float> pressure(w* h, 0.0f); // 1 component for pressure
+std::vector<float> Div(w* h, 0.0f); // 1 component for divergence
 
-     void test() {
-         for(int y=0;y<h;y++) {
-             for(int x=0;x<w;x++) {
-				 int i = y * w + x;
-                 float val = 0.0f;
-               //  if ((x + y) % 2 == 0) val = 0.0f;
-                /* if ((x + y) % 3 == 0) val = 0.5f;
-                 if ((x + y) % 5 == 0) val = 0.5f;
-                 if ((x + y) % 11 == 0) val = 0.7f;*/
+int issolid(int x, int y) {
+    // Simple boundary condition: solid walls at the edges
+    if (x <= 0 || x >= w - 1 || y <= 0 || y >= h - 1)
+        return 1; // solid
+    return 0; // fluid
+}
 
-                 data[i] = val;
-             }
-		 }
-     }
+void divergence(){
+    for(int y = 1; y < h - 1; y++) {      // start at 1, stop before h-1
+        for (int x = 1; x < w - 1; x++) {
+
+           int i =y*w+x;
+           float vleft = issolid(x - 1, y) ? 0.0f : velocityx[i - 1];
+           float vright = issolid(x + 1, y) ? 0.0f : velocityx[i + 1];
+           float vtop = issolid(x, y - 1) ? 0.0f : velocityy[i - w];
+           float vbottom = issolid(x, y + 1) ? 0.0f : velocityy[i + w];
+
+
+            float gradx=(vright-vleft)/settings.tilesize;
+            float grady=(vbottom-vtop)/settings.tilesize;
+            float divergence=gradx+grady;
+            Div[i]=divergence;
+
+            // Store or use the divergence value as needed
+        pressure[y*w+x] = 0.0f;
+        }
+    }
+}
+void solvePressure(int iterations,float d) {
+    for (int iter = 0; iter < iterations; iter++) {
+        float dt = d / iterations;
+        for (int y = 1; y < h - 1; y++) {
+            for (int x = 1; x < w - 1; x++) {
+                int i = y * w + x;
+
+				int flowtop = issolid(x , y +1) ? 0 : 1;
+				int flowbottom = issolid(x , y-1) ? 0 : 1;
+				int flowleft = issolid(x-1, y ) ? 0 : 1;
+				int flowright = issolid(x+1, y ) ? 0 : 1;
+                
+				int dgecount = flowbottom + flowtop + flowleft + flowright;
+
+                if(issolid(x,y)|| dgecount==0){pressure[i] = 0.0f;
+				continue;
+				}
+				
+
+				/*float ptop = pressure[i - w] * flowtop;
+				float pbottom = pressure[i + w] *flowbottom;
+				float pleft = pressure[i - 1]*flowleft;
+				float pright = pressure[i + 1]*flowright;
+
+				float vleft = velocityx[i - 1]*flowleft;
+                float vright = velocityx[i + 1]*flowright;
+                float vtop = velocityy[i - w]*flowtop;
+                float vbottom = velocityy[i + w]*flowbottom;
+
+				float psum = ptop + pbottom + pleft + pright;
+
+				float vsum = vleft - vright + vtop - vbottom;
+
+               float newpressure = (psum - settings.density * settings.tilesize * vsum / dt) / dgecount;*/
+				
+
+				//printf("dgecount: %d\n", dgecount);
+                float newpressure = (
+                    Div[i] +
+                   ( pressure[i - 1] * flowleft)
+                    + (pressure[i + 1] *flowright)
+                    +(pressure[i - w]*flowtop)
+					+ (pressure[i + w] * flowbottom)
+                    ) / dgecount;
+
+				float oldpreessure = pressure[i];
+                pressure[i] = oldpreessure + (newpressure - oldpreessure) * settings.sor;
+
+            }
+        }
+    }
+}
+
+void project() {
+    for (int y = 1; y < h - 1; y++) {
+        for (int x = 1; x < w - 1; x++) {
+            int i = y * w + x;
+            settings.k = fixeddt / (settings.density * settings.tilesize);
+            if (issolid(x, y) || issolid(x - 1, y)) {
+				velocityx[i] = 0.0f;
+                continue;
+            }
+            velocityx[i] -= settings.k * (pressure[i + 1] - pressure[i - 1]);
+
+            if (issolid(x, y) || issolid(x, y - 1)) {
+                velocityy[i] = 0.0f;
+                continue;
+            }
+				
+            velocityy[i] -= settings.k * (pressure[i + w] - pressure[i - w]);
+			//velocityy[i] += 100.0f * fixeddt; // add buoyancy force
+			//velocityx[i] *= 0.99f; // simple damping
+			//velocityy[i] *= 0.99f; // simple damping
+           // data[i] *= 0.995f;
+        }
+    }
+}
+
+
+std::vector<float> tempdata(w* h, 0.0f);
+std::vector<float> tempvx(w* h, 0.0f);
+std::vector<float> tempvy(w* h, 0.0f);
+
+// bilinear sample helper
+float sample(std::vector<float>& field, float x, float y) {
+    x = std::clamp(x, 0.5f, w - 1.5f);
+    y = std::clamp(y, 0.5f, h - 1.5f);
+    int x0 = (int)x, y0 = (int)y;
+    int x1 = x0 + 1, y1 = y0 + 1;
+    float tx = x - x0, ty = y - y0;
+    return (1 - tx) * (1 - ty) * field[y0 * w + x0]
+        + tx * (1 - ty) * field[y0 * w + x1]
+        + (1 - tx) * ty * field[y1 * w + x0]
+        + tx * ty * field[y1 * w + x1];
+}
+void advectVelocity(float dt) {
+    for (int y = 1; y < h - 1; y++) {
+        for (int x = 1; x < w - 1; x++) {
+            int i = y * w + x;
+            if (issolid(x, y)) { tempvx[i] = 0; tempvy[i] = 0; continue; }
+            float px = x - velocityx[i] * dt;
+            float py = y - velocityy[i] * dt;
+            tempvx[i] = sample(velocityx, px, py);
+            tempvy[i] = sample(velocityy, px, py);
+        }
+    }
+    std::swap(velocityx, tempvx);
+    std::swap(velocityy, tempvy);
+    // zero boundaries
+    for (int x = 0; x < w; x++) {
+        velocityx[x] = 0; velocityx[(h - 1) * w + x] = 0;
+        velocityy[x] = 0; velocityy[(h - 1) * w + x] = 0;
+    }
+    for (int y = 0; y < h; y++) {
+        velocityx[y * w] = 0; velocityx[y * w + w - 1] = 0;
+        velocityy[y * w] = 0; velocityy[y * w + w - 1] = 0;
+    }
+}
+void advectDensity(float dt) {
+    for (int y = 1; y < h - 1; y++) {
+        for (int x = 1; x < w - 1; x++) {
+            int i = y * w + x;
+            if (issolid(x, y)) { tempdata[i] = 0; continue; }
+            float px = x - velocityx[i] * dt;
+            float py = y - velocityy[i] * dt;
+            tempdata[i] = sample(density, px, py);
+        }
+    }
+    std::swap(density, tempdata);
+    for (int x = 0; x < w; x++) { density[x] = 0; density[(h - 1) * w + x] = 0; }
+    for (int y = 0; y < h; y++) { density[y * w] = 0; density[y * w + w - 1] = 0; }
+}
+float totalerror = 0.0f;
+void divergenceerror() {
+    for (int y = 1; y < h - 1; y++) {
+        for (int x = 1; x < w - 1; x++) {
+            int i = y * w + x;
+            float vleft = issolid(x - 1, y) ? 0.0f : velocityx[i - 1];
+            float vright = issolid(x + 1, y) ? 0.0f : velocityx[i + 1];
+            float vtop = issolid(x, y - 1) ? 0.0f : velocityy[i - w];
+            float vbottom = issolid(x, y + 1) ? 0.0f : velocityy[i + w];
+            float gradx = (vright - vleft) / settings.tilesize;
+            float grady = (vbottom - vtop) / settings.tilesize;
+            float divergence = gradx + grady;
+            totalerror += std::abs(divergence);
+        }
+    }
+	const float displayfactor = 10000.0f; // Adjust this factor to make the error more visible
+    settings.diverror = (int)(totalerror / (w * h) * displayfactor);
+	totalerror = 0.0f; // reset for next frame
+
+}
+
+void diffuse(float dt) {
+    std::vector<float> tmp = density;
+    float a = settings.visc * dt *w*h;
+    for (int iter = 0; iter < 20; iter++) {
+        for (int y = 1; y < h - 1; y++) {
+            for (int x = 1; x < w - 1; x++) {
+                int i = y * w + x;
+                if (issolid(x, y)) continue;
+                density[i] = (tmp[i] + a * (
+                    density[i - 1] + density[i + 1] +
+                    density[i - w] + density[i + w]
+                    )) / (1 + 4 * a);
+            }
+        }
+    }
+}
+void dissipate(float dt) {
+    float decay = 1.0f - settings.dissipation * dt; // dissipation ~ 0.5f
+    for (int i = 0; i < w * h; i++)
+        density[i] *= decay;
+}
+
+void dampVelocity(float dt) {
+    float damp = 1.0f - settings.damp * dt; // velDamping ~ 0.5f
+    for (int i = 0; i < w * h; i++) {
+        velocityx[i] *= damp;
+        velocityy[i] *= damp;
+    }
+}
+
+std::vector<float> vorticity(w* h, 0.0f);
+
+void vorticityConfinement(float dt) {
+    // step 1: compute curl (scalar in 2D) at each cell
+    for (int y = 1; y < h - 1; y++) {
+        for (int x = 1; x < w - 1; x++) {
+            int i = y * w + x;
+            if (issolid(x, y)) { vorticity[i] = 0; continue; }
+            float dvdx = (velocityy[i + 1] - velocityy[i - 1]) * 0.5f;
+            float dudy = (velocityx[i + w] - velocityx[i - w]) * 0.5f;
+            vorticity[i] = dvdx - dudy;
+        }
+    }
+
+    // step 2: compute gradient of |vorticity| magnitude, then apply force
+    for (int y = 1; y < h - 1; y++) {
+        for (int x = 1; x < w - 1; x++) {
+            int i = y * w + x;
+            if (issolid(x, y)) continue;
+
+            float dx = (fabsf(vorticity[i + 1]) - fabsf(vorticity[i - 1])) * 0.5f;
+            float dy = (fabsf(vorticity[i + w]) - fabsf(vorticity[i - w])) * 0.5f;
+
+            float len = sqrtf(dx * dx + dy * dy) + 1e-5f;
+            dx /= len;
+            dy /= len;
+
+            float omega = vorticity[i];
+            // force is perpendicular to gradient, scaled by omega
+            velocityx[i] += settings.vorticity * dy * omega * dt;
+            velocityy[i] += settings.vorticity * -dx * omega * dt;
+        }
+    }
+}
 
 static GLuint compileShader(GLenum type, const char* src)
 {
@@ -124,7 +362,7 @@ void initshader() {
 void draw() {
 
     glUseProgram(shaderProgram);
-    glUniform2f(uresolution, (float)SCR_WIDTH, (float)SCR_HEIGHT);
+    glUniform2f(uresolution, (float)currentW, (float)currentH);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, TEX);
     glBindVertexArray(VAO);
@@ -136,17 +374,23 @@ void draw() {
 }
 
 extern "C" void restart() {
-
-    w = SCR_WIDTH / (int)settings.tilesize;
-    h = SCR_HEIGHT / (int)settings.tilesize;
-    freecuda();
-	unregisterbuffer();
-	data.resize(w * h, 0.0f);
-    initshader();
-   initcuda(w, h);
-    registerBuffer(TEX);
-    test();
-   updateframe(w, h, data.data());
+    w = currentW / (int)settings.tilesize;
+    h = currentH / (int)settings.tilesize;
+    freecuda(); unregisterbuffer();
+    density.assign(w * h, 0.0f);
+    velocityx.assign(w * h, 0.0f);
+    velocityy.assign(w * h, 0.0f);
+    pressure.assign(w * h, 0.0f);
+    vorticity.assign(w * h, 0.0f);
+    Div.assign(w * h, 0.0f);
+    tempdata.assign(w * h, 0.0f); // ← missing
+    tempvx.assign(w * h, 0.0f);   // ← missing
+    tempvy.assign(w * h, 0.0f);   // ← missing
+    initshader(); initcuda(w, h); registerBuffer(TEX);
+    updateframe(w, h, density.data());
+   
+  
+  // updateframe(w, h, data.data());
 }
 
 int main()
@@ -173,6 +417,10 @@ int main()
     }
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+    glfwSetScrollCallback(window, [](GLFWwindow*, double, double dy) {
+        settings.radius = std::clamp(settings.radius + (float)dy * 5.0f, 5.0f, 300.0f);
+        });
+
 
     // glad: load all OpenGL function pointers
     // ---------------------------------------
@@ -208,22 +456,37 @@ int main()
 		registerBuffer(TEX);
         double lastTime = glfwGetTime();
         double fpsclock = lastTime;
+		float accumulator = 0.0f;
     // render loop
     while (!glfwWindowShouldClose(window))
     {
 		double currentTime = glfwGetTime();
 		double frametime = currentTime - lastTime;
 		lastTime = currentTime;
-        float accumulator = (float)frametime;
+         accumulator += (float)frametime;
         float dt = (float)frametime;
 
         glfwGetCursorPos(window, &mousex, &mousey);
+         dmx = mousex - prevmousex;
+         dmy = mousey - prevmousey;
+        prevmousex = mousex;
+        prevmousey = mousey;
         processInput(window);
+
         while (accumulator >= fixeddt) {
            // test();
-			updateframe(w,h,data.data());
-
-       
+            advectVelocity(fixeddt);
+            // 2. then make it divergence-free
+            divergence();
+            solvePressure(settings.itters, fixeddt);
+            project();
+            vorticityConfinement(fixeddt);
+			dampVelocity(fixeddt);
+            // 3. then advect density along the clean velocity
+            advectDensity(fixeddt);
+            diffuse(fixeddt);
+            dissipate(fixeddt);
+            divergenceerror();
 			accumulator -= fixeddt;
         }
         
@@ -238,6 +501,7 @@ int main()
         // ------
         glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
         glClear(GL_COLOR_BUFFER_BIT);
+			updateframe(w,h,density.data());
         draw();
         ui();
 
@@ -291,16 +555,15 @@ void processInput(GLFWwindow* window)
 
 {
 
-    glfwSetScrollCallback(window, [](GLFWwindow*, double, double dy) {
-        settings.radius = std::clamp(settings.radius + (float)dy * 5.0f, 5.0f, 300.0f);
-        });
-
+    if (glfwGetKey(window, GLFW_KEY_K) == GLFW_PRESS) {
+        restart();
+    }
 
 
 
     if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
         int col = (int)mousex / settings.tilesize;
-        int row = (int)(SCR_HEIGHT - mousey) / settings.tilesize;
+        int row = (int)(currentH - mousey) / settings.tilesize;
        settings.radiuscells = settings.radius / settings.tilesize;
         if (col >= 0 && col < w && row >= 0 && row < h) {
             int i = row * w + col;
@@ -314,10 +577,18 @@ void processInput(GLFWwindow* window)
                     float d = (dx * dx) + (dy * dy);
                     float dist = sqrtf(d);
                   //  printf("%3f\n", dist);
-                    if (dist <= settings.radiuscells) {
-                        data[idx] = 1.0f;
-                       // printf("in radius");
-                       // updateframe(w, h, data.data());
+                    if (dist <= settings.radiuscells && !issolid(x, y)) {
+                        float nx = dx / (dist + 0.001f); // normalized direction from center
+                        float ny = dy / (dist + 0.001f);
+                        float mousespeed = sqrtf(dmx * dmx + dmy * dmy);
+                        // inject velocity in mouse direction
+                        float vscale = 3.0f; // tune this
+                      //  velocityx[idx] += (float)(dmx / settings.tilesize) * vscale;
+                      //  velocityy[idx] -= (float)(dmy / settings.tilesize) * vscale;
+                      //  // add perpendicular swirl component
+                      //  velocityx[idx] += -ny * mousespeed * 0.5f;
+                      //  velocityy[idx] += nx * mousespeed * 0.5f;
+                        density[idx] += 1.0f *fixeddt;
                     }
                     
                 }
@@ -326,10 +597,50 @@ void processInput(GLFWwindow* window)
 
 
            // data[i] = 1.0f;
-            updateframe(w, h, data.data());
+          /*  divergence();
+			solvePressure();
+			project();
+			advect(fixeddt);*/
         }
+           // updateframe(w, h, data.data());
     }
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+        int col = (int)mousex / settings.tilesize;
+        int row = (int)(currentH - mousey) / settings.tilesize;
+        settings.radiuscells = settings.radius / settings.tilesize;
+        if (col >= 0 && col < w && row >= 0 && row < h) {
+            int i = row * w + col;
+            // float radius = 10.0f;
 
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    int idx = y * w + x;
+                    float dx = x - col;
+                    float dy = y - row;
+                    float d = (dx * dx) + (dy * dy);
+                    float dist = sqrtf(d);
+                    //  printf("%3f\n", dist);
+                    if (dist <= settings.radiuscells) {
+                        
+                        
+                        // left mouse — same fix as right
+                        velocityx[idx] += (float)(dmx / settings.tilesize) * 10.0f;
+                        velocityy[idx] -= (float)(dmy / settings.tilesize) * 10.0f;
+                    }
+
+                }
+            }
+
+
+
+            // data[i] = 1.0f;
+           /*  divergence();
+             solvePressure();
+             project();
+             advect(fixeddt);*/
+        }
+        // updateframe(w, h, data.data());
+    }
 
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
@@ -342,5 +653,8 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     // make sure the viewport matches the new window dimensions; note that width and 
     // height will be significantly larger than specified on retina displays.
+    currentW = width;
+    currentH = height;
     glViewport(0, 0, width, height);
+	
 }

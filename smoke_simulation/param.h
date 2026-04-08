@@ -10,8 +10,15 @@ struct param {
 	float radius = 50.0f;
 	float radiuscells = 0.0f;
 	float density = 1.0f;
+	float sor = 1.3f;
+	float visc = 0.001f;
+	float dissipation = 0.05f;
+	float vorticity = 5.0f;
+	int diverror = 0;
+	float damp = 0.99f;
+	float k = 0.5f;
 	int fpsCount = 0;
 	int w = 0, h = 0;
-	int itters = 20;
+	int itters = 40;
 };
 extern param settings;
