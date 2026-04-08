@@ -45,6 +45,7 @@
   <PropertyGroup Label="Globals">
     <ProjectGuid>{D7C800A2-0ABC-D457-1CA2-F6D9C917F6F7}</ProjectGuid>
     <RootNamespace>smoke_simulation</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
@@ -99,6 +100,7 @@
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;WIN64;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>D:\visual_studio\smoke_simulation\glad\include;D:\visual_studio\smoke_simulation\glfw-3.4.bin.WIN64\include;D:\visual_studio\smoke_simulation\imgui-1.91.1;D:\visual_studio\smoke_simulation\imgui-1.91.1\backends;D:\visual_studio\smoke_simulation\smoke_simulation\build;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>

@@ -7,7 +7,7 @@ extern "C" {
 #endif
 	void registerBuffer(unsigned int texId);
 	void unregisterbuffer();
-	void updateframe(int w,int h);
+	void updateframe(int w,int h,float* data);
 	void initcuda(int w, int h);
 	void freecuda();
 

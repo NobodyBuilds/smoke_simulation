@@ -7,6 +7,8 @@
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
+#include<algorithm>
+#include<cmath>
 #include "ui.h"
 #include <iostream>
 
@@ -17,13 +19,35 @@ void processInput(GLFWwindow* window);
 const unsigned int SCR_WIDTH = 1000;
 const unsigned int SCR_HEIGHT = 900;
 
+double mousex, mousey;
+
 const float fixeddt = 1.0f / 120.0f;
 
     
      int w = SCR_WIDTH / settings.tilesize;
      int h = SCR_HEIGHT / settings.tilesize;
 
-    
+     float radiusPx = 50.0f; // world-space pixels, stays consistent
+  
+
+
+
+	 std::vector<float> data(w* h, 0.0f);
+
+     void test() {
+         for(int y=0;y<h;y++) {
+             for(int x=0;x<w;x++) {
+				 int i = y * w + x;
+                 float val = 0.0f;
+               //  if ((x + y) % 2 == 0) val = 0.0f;
+                /* if ((x + y) % 3 == 0) val = 0.5f;
+                 if ((x + y) % 5 == 0) val = 0.5f;
+                 if ((x + y) % 11 == 0) val = 0.7f;*/
+
+                 data[i] = val;
+             }
+		 }
+     }
 
 static GLuint compileShader(GLenum type, const char* src)
 {
@@ -81,6 +105,7 @@ void initshader() {
 
 	glBindTexture(GL_TEXTURE_2D, TEX);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, w, h, 0, GL_RED, GL_FLOAT, nullptr);
+  
 	glad_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glad_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     
@@ -116,9 +141,12 @@ extern "C" void restart() {
     h = SCR_HEIGHT / (int)settings.tilesize;
     freecuda();
 	unregisterbuffer();
+	data.resize(w * h, 0.0f);
     initshader();
-    initcuda(w, h);
+   initcuda(w, h);
     registerBuffer(TEX);
+    test();
+   updateframe(w, h, data.data());
 }
 
 int main()
@@ -164,7 +192,15 @@ int main()
     // compile shaders
     // ---------------
     shaderProgram = createProgram(vertexShaderSource, fragmentShaderSource);
-		//uresolution = glGetUniformLocation(shaderProgram, "uresolution");
+    // retrieve uniform locations and bind sampler
+    glUseProgram(shaderProgram);
+    {
+        GLint loc = glGetUniformLocation(shaderProgram, "ushader");
+        if (loc >= 0) { glUniform1i(loc, 0); ushader = (GLuint)loc; }
+        loc = glGetUniformLocation(shaderProgram, "uresolution");
+        if (loc >= 0) { uresolution = (GLuint)loc; }
+    }
+    glUseProgram(0);
     // -----------
         
         initshader();
@@ -181,9 +217,13 @@ int main()
         float accumulator = (float)frametime;
         float dt = (float)frametime;
 
-       
+        glfwGetCursorPos(window, &mousex, &mousey);
+        processInput(window);
         while (accumulator >= fixeddt) {
-			updateframe(w,h);
+           // test();
+			updateframe(w,h,data.data());
+
+       
 			accumulator -= fixeddt;
         }
         
@@ -192,7 +232,7 @@ int main()
 
         // input
         // -----
-        processInput(window);
+      
 
         // render
         // ------
@@ -248,9 +288,52 @@ int main()
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 // ---------------------------------------------------------------------------------------------------------
 void processInput(GLFWwindow* window)
+
 {
+
+    glfwSetScrollCallback(window, [](GLFWwindow*, double, double dy) {
+        settings.radius = std::clamp(settings.radius + (float)dy * 5.0f, 5.0f, 300.0f);
+        });
+
+
+
+
+    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+        int col = (int)mousex / settings.tilesize;
+        int row = (int)(SCR_HEIGHT - mousey) / settings.tilesize;
+       settings.radiuscells = settings.radius / settings.tilesize;
+        if (col >= 0 && col < w && row >= 0 && row < h) {
+            int i = row * w + col;
+           // float radius = 10.0f;
+          
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    int idx = y * w + x;
+                    float dx = x - col;
+                    float dy = y - row;
+                    float d = (dx * dx) + (dy * dy);
+                    float dist = sqrtf(d);
+                  //  printf("%3f\n", dist);
+                    if (dist <= settings.radiuscells) {
+                        data[idx] = 1.0f;
+                       // printf("in radius");
+                       // updateframe(w, h, data.data());
+                    }
+                    
+                }
+            }
+
+
+
+           // data[i] = 1.0f;
+            updateframe(w, h, data.data());
+        }
+    }
+
+
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
+
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes

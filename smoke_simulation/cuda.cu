@@ -36,9 +36,7 @@ extern "C" void registerBuffer(unsigned int texId) {
 	if (err != cudaSuccess) {
 		std::cerr << "Failed to register OpenGL texture with CUDA: " << cudaGetErrorString(err) << std::endl;
 	}
-	else {
-		printf("tex id registered %d\n", texId);
-	}
+	
 }
 
 extern "C" void unregisterbuffer() {
@@ -48,28 +46,25 @@ extern "C" void unregisterbuffer() {
 	}
 }
 
-__global__ void fillKernel(cudaSurfaceObject_t surf, int w, int h) {
+__global__ void fillKernel(cudaSurfaceObject_t surf, int w, int h,float* data) {
 	int x = blockIdx.x * blockDim.x + threadIdx.x;
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
 	if (x >= w || y >= h) return;
-	float val = 1.0f;
-	if ((x + y) % 2 == 0) val = 0.24680f;
-	if ((x + y) % 3 == 0) val = 0.3330f;
-	if ((x + y) % 5 == 0) val = 0.5f;
-	if ((x + y) % 11 == 0) val = 0.94510f;
-
-
+	float val =data[y*w+x];
+	
 	surf2Dwrite(val, surf, x * sizeof(float), y);
 }
 
 
 
-extern "C" void updateframe(int w,int h) {
+extern "C" void updateframe(int w,int h,float* h_data) {
 
 
-
-
-
+	cudaMemcpy(d_data, h_data, w * h * sizeof(float), cudaMemcpyHostToDevice);
+	cudaError_t att =cudaGetLastError();
+	if (att) {
+		printf("cudaMemcpy error: %s\n", cudaGetErrorString(att));
+	}
 	cudaGraphicsMapResources(1, &d_tex);
 
 	cudaArray_t arr;
@@ -84,7 +79,7 @@ extern "C" void updateframe(int w,int h) {
 
 	dim3 block(16, 16);
 	dim3 grid((w + 15) / 16, (h + 15) / 16);
-	fillKernel << <grid, block >> > (surf, w, h);
+	fillKernel << <grid, block >> > (surf, w, h,d_data);
 
 	cudaDestroySurfaceObject(surf);
 	cudaGraphicsUnmapResources(1, &d_tex);
