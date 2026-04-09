@@ -18,7 +18,7 @@ void processInput(GLFWwindow* window);
 // settings
 const unsigned int SCR_WIDTH = 1000;
 const unsigned int SCR_HEIGHT = 900;
-
+double frameTimeSec = 0.0;
 int currentW = SCR_WIDTH;
 int currentH = SCR_HEIGHT;
 double mousex, mousey;
@@ -29,17 +29,19 @@ const float fixeddt = 1.0f / 120.0f;
     
      int w = SCR_WIDTH / settings.tilesize;
      int h = SCR_HEIGHT / settings.tilesize;
-
+     
      float radiusPx = 50.0f; // world-space pixels, stays consistent
   
 
-
-
-	 std::vector<float> density(w* h, 0.0f);
+    
+std::vector<float> density(w* h, 0.0f);
 std::vector<float> velocityx(w * h , 0.0f); // 2 components for velocity x
 std::vector<float> velocityy(w * h , 0.0f); // 2 components for velocity y
 std::vector<float> pressure(w* h, 0.0f); // 1 component for pressure
 std::vector<float> Div(w* h, 0.0f); // 1 component for divergence
+std::vector<float> tempdata(w* h, 0.0f);
+std::vector<float> tempvx(w* h, 0.0f);
+std::vector<float> tempvy(w* h, 0.0f);
 
 int issolid(int x, int y) {
     // Simple boundary condition: solid walls at the edges
@@ -59,8 +61,8 @@ void divergence(){
            float vbottom = issolid(x, y + 1) ? 0.0f : velocityy[i + w];
 
 
-            float gradx=(vright-vleft)/settings.tilesize;
-            float grady=(vbottom-vtop)/settings.tilesize;
+            float gradx=(vright-vleft)*0.5f;
+            float grady=(vbottom-vtop)*0.5f;
             float divergence=gradx+grady;
             Div[i]=divergence;
 
@@ -70,53 +72,31 @@ void divergence(){
     }
 }
 void solvePressure(int iterations,float d) {
+    float scale = settings.density / d;
+
     for (int iter = 0; iter < iterations; iter++) {
-        float dt = d / iterations;
         for (int y = 1; y < h - 1; y++) {
             for (int x = 1; x < w - 1; x++) {
                 int i = y * w + x;
 
-				int flowtop = issolid(x , y +1) ? 0 : 1;
-				int flowbottom = issolid(x , y-1) ? 0 : 1;
-				int flowleft = issolid(x-1, y ) ? 0 : 1;
-				int flowright = issolid(x+1, y ) ? 0 : 1;
-                
-				int dgecount = flowbottom + flowtop + flowleft + flowright;
+                int flowtop = issolid(x, y + 1) ? 0 : 1;
+                int flowbottom = issolid(x, y - 1) ? 0 : 1;
+                int flowleft = issolid(x - 1, y) ? 0 : 1;
+                int flowright = issolid(x + 1, y) ? 0 : 1;
+                int dgecount = flowbottom + flowtop + flowleft + flowright;
 
-                if(issolid(x,y)|| dgecount==0){pressure[i] = 0.0f;
-				continue;
-				}
-				
+                if (issolid(x, y) || dgecount == 0) { pressure[i] = 0.0f; continue; }
 
-				/*float ptop = pressure[i - w] * flowtop;
-				float pbottom = pressure[i + w] *flowbottom;
-				float pleft = pressure[i - 1]*flowleft;
-				float pright = pressure[i + 1]*flowright;
-
-				float vleft = velocityx[i - 1]*flowleft;
-                float vright = velocityx[i + 1]*flowright;
-                float vtop = velocityy[i - w]*flowtop;
-                float vbottom = velocityy[i + w]*flowbottom;
-
-				float psum = ptop + pbottom + pleft + pright;
-
-				float vsum = vleft - vright + vtop - vbottom;
-
-               float newpressure = (psum - settings.density * settings.tilesize * vsum / dt) / dgecount;*/
-				
-
-				//printf("dgecount: %d\n", dgecount);
                 float newpressure = (
-                    Div[i] +
-                   ( pressure[i - 1] * flowleft)
-                    + (pressure[i + 1] *flowright)
-                    +(pressure[i - w]*flowtop)
-					+ (pressure[i + w] * flowbottom)
+                    (pressure[i - 1] * flowleft)
+                    + (pressure[i + 1] * flowright)
+                    + (pressure[i - w] * flowtop)
+                    + (pressure[i + w] * flowbottom)
+                    - scale * Div[i]                  // ← correct sign + physical scaling
                     ) / dgecount;
 
-				float oldpreessure = pressure[i];
-                pressure[i] = oldpreessure + (newpressure - oldpreessure) * settings.sor;
-
+                float oldpressure = pressure[i];
+                pressure[i] = oldpressure + (newpressure - oldpressure) * settings.sor;
             }
         }
     }
@@ -126,31 +106,35 @@ void project() {
     for (int y = 1; y < h - 1; y++) {
         for (int x = 1; x < w - 1; x++) {
             int i = y * w + x;
-            settings.k = fixeddt / (settings.density * settings.tilesize);
-            if (issolid(x, y) || issolid(x - 1, y)) {
-				velocityx[i] = 0.0f;
-                continue;
-            }
-            velocityx[i] -= settings.k * (pressure[i + 1] - pressure[i - 1]);
+            settings.k = fixeddt / (settings.density * 2.0f);
 
-            if (issolid(x, y) || issolid(x, y - 1)) {
-                velocityy[i] = 0.0f;
-                continue;
-            }
-				
-            velocityy[i] -= settings.k * (pressure[i + w] - pressure[i - w]);
-			//velocityy[i] += 100.0f * fixeddt; // add buoyancy force
-			//velocityx[i] *= 0.99f; // simple damping
-			//velocityy[i] *= 0.99f; // simple damping
-           // data[i] *= 0.995f;
+            
+                    if (issolid(x, y)) {
+                        velocityx[i] = 0.0f;
+                        velocityy[i] = 0.0f;
+                        continue;
+                    }
+
+                    // x-component — zero if neighbor wall blocks this face
+                    if (issolid(x - 1, y))
+                        velocityx[i] = 0.0f;
+                    else
+                        velocityx[i] -= settings.k * (pressure[i + 1] - pressure[i - 1]);
+
+                    // y-component — independent, never skipped by x-check
+                    if (issolid(x, y - 1))
+                        velocityy[i] = 0.0f;
+                    else
+                        velocityy[i] -= settings.k * (pressure[i + w] - pressure[i - w]);
+                    velocityy[i] += settings.bouyancy * fixeddt; // add buoyancy force
+
+                
         }
     }
 }
 
 
-std::vector<float> tempdata(w* h, 0.0f);
-std::vector<float> tempvx(w* h, 0.0f);
-std::vector<float> tempvy(w* h, 0.0f);
+
 
 // bilinear sample helper
 float sample(std::vector<float>& field, float x, float y) {
@@ -169,8 +153,11 @@ void advectVelocity(float dt) {
         for (int x = 1; x < w - 1; x++) {
             int i = y * w + x;
             if (issolid(x, y)) { tempvx[i] = 0; tempvy[i] = 0; continue; }
-            float px = x - velocityx[i] * dt;
-            float py = y - velocityy[i] * dt;
+            float vx = std::clamp(velocityx[i], -1.0f / dt, 1.0f / dt);
+            float vy = std::clamp(velocityy[i], -1.0f / dt, 1.0f / dt);
+
+            float px = x - vx * dt;
+            float py = y - vy * dt;
             tempvx[i] = sample(velocityx, px, py);
             tempvy[i] = sample(velocityy, px, py);
         }
@@ -210,8 +197,8 @@ void divergenceerror() {
             float vright = issolid(x + 1, y) ? 0.0f : velocityx[i + 1];
             float vtop = issolid(x, y - 1) ? 0.0f : velocityy[i - w];
             float vbottom = issolid(x, y + 1) ? 0.0f : velocityy[i + w];
-            float gradx = (vright - vleft) / settings.tilesize;
-            float grady = (vbottom - vtop) / settings.tilesize;
+            float gradx = (vright - vleft) / 0.5f;
+                float grady = (vbottom - vtop) / 0.5f;
             float divergence = gradx + grady;
             totalerror += std::abs(divergence);
         }
@@ -224,7 +211,7 @@ void divergenceerror() {
 
 void diffuse(float dt) {
     std::vector<float> tmp = density;
-    float a = settings.visc * dt *w*h;
+    float a = settings.visc * dt ;
     for (int iter = 0; iter < 20; iter++) {
         for (int y = 1; y < h - 1; y++) {
             for (int x = 1; x < w - 1; x++) {
@@ -376,6 +363,8 @@ void draw() {
 extern "C" void restart() {
     w = currentW / (int)settings.tilesize;
     h = currentH / (int)settings.tilesize;
+    settings.w = w;
+    settings.h = h;
     freecuda(); unregisterbuffer();
     density.assign(w * h, 0.0f);
     velocityx.assign(w * h, 0.0f);
@@ -450,7 +439,8 @@ int main()
     }
     glUseProgram(0);
     // -----------
-        
+    settings.w = w;
+    settings.h = h;
         initshader();
 		initcuda(w, h);
 		registerBuffer(TEX);
@@ -460,9 +450,12 @@ int main()
     // render loop
     while (!glfwWindowShouldClose(window))
     {
+        extern double frameTimeSec;
 		double currentTime = glfwGetTime();
 		double frametime = currentTime - lastTime;
 		lastTime = currentTime;
+        frameTimeSec = frametime;
+
          accumulator += (float)frametime;
         float dt = (float)frametime;
 
@@ -481,7 +474,7 @@ int main()
             solvePressure(settings.itters, fixeddt);
             project();
             vorticityConfinement(fixeddt);
-			dampVelocity(fixeddt);
+			//dampVelocity(fixeddt);
             // 3. then advect density along the clean velocity
             advectDensity(fixeddt);
             diffuse(fixeddt);
@@ -582,13 +575,11 @@ void processInput(GLFWwindow* window)
                         float ny = dy / (dist + 0.001f);
                         float mousespeed = sqrtf(dmx * dmx + dmy * dmy);
                         // inject velocity in mouse direction
-                        float vscale = 3.0f; // tune this
-                      //  velocityx[idx] += (float)(dmx / settings.tilesize) * vscale;
-                      //  velocityy[idx] -= (float)(dmy / settings.tilesize) * vscale;
-                      //  // add perpendicular swirl component
-                      //  velocityx[idx] += -ny * mousespeed * 0.5f;
-                      //  velocityy[idx] += nx * mousespeed * 0.5f;
-                        density[idx] += 1.0f *fixeddt;
+                        
+                       
+                       // velocityx[idx] += -ny * mousespeed * 0.5f;
+                       // velocityy[idx] += nx * mousespeed * 0.5f;
+                        density[idx] += settings.dscale *fixeddt;
                     }
                     
                 }
@@ -622,10 +613,10 @@ void processInput(GLFWwindow* window)
                     //  printf("%3f\n", dist);
                     if (dist <= settings.radiuscells) {
                         
-                        
+                        float vscale =settings.vscale;
                         // left mouse — same fix as right
-                        velocityx[idx] += (float)(dmx / settings.tilesize) * 10.0f;
-                        velocityy[idx] -= (float)(dmy / settings.tilesize) * 10.0f;
+                        velocityx[idx] += (float)(dmx / settings.tilesize / frameTimeSec) * vscale * fixeddt;
+                        velocityy[idx] -= (float)(dmy / settings.tilesize / frameTimeSec) * vscale * fixeddt;
                     }
 
                 }
@@ -655,6 +646,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     // height will be significantly larger than specified on retina displays.
     currentW = width;
     currentH = height;
+    
     glViewport(0, 0, width, height);
-	
+    restart();
 }
