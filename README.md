@@ -7,7 +7,10 @@ A real-time 2D Eulerian fluid simulation built from scratch in C++/OpenGL, imple
 ![Status](https://img.shields.io/badge/status-active-brightgreen)
 ---
 DEMO
-<img width="985" height="881" alt="Screenshot 2026-04-08 163248" src="https://github.com/user-attachments/assets/0c99b09e-973b-4576-a0e6-0ffbbec5f8f9" />
+
+
+
+https://github.com/user-attachments/assets/d2b8c4fb-c7c4-45f8-bf26-1d8087a95e58
 
 ---
 
