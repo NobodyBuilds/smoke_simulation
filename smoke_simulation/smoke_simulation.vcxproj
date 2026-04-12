@@ -101,6 +101,7 @@
       <PreprocessorDefinitions>WIN32;WIN64;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>D:\visual_studio\smoke_simulation\glad\include;D:\visual_studio\smoke_simulation\glfw-3.4.bin.WIN64\include;D:\visual_studio\smoke_simulation\imgui-1.91.1;D:\visual_studio\smoke_simulation\imgui-1.91.1\backends;D:\visual_studio\smoke_simulation\smoke_simulation\build;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
