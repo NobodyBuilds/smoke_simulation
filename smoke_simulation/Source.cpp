@@ -16,7 +16,7 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height);
 void processInput(GLFWwindow *window);
 
 // settings
-const unsigned int SCR_WIDTH = 1000;
+const unsigned int SCR_WIDTH = 1800;
 const unsigned int SCR_HEIGHT = 900;
 double frameTimeSec = 0.0;
 int currentW = SCR_WIDTH;
@@ -224,29 +224,29 @@ void advectDensity(float dt)
         density[y * w + w - 1] = 0;
     }
 }
-float totalerror = 0.0f;
+//float totalerror = 0.0f;
 // rc
-void divergenceerror()
-{
-    for (int y = 1; y < h - 1; y++)
-    {
-        for (int x = 1; x < w - 1; x++)
-        {
-            int i = y * w + x;
-            float vleft = isolid(x - 1, y) ? 0.0f : velocityx[i - 1];
-            float vright = isolid(x + 1, y) ? 0.0f : velocityx[i + 1];
-            float vtop = isolid(x, y - 1) ? 0.0f : velocityy[i - w];
-            float vbottom = isolid(x, y + 1) ? 0.0f : velocityy[i + w];
-            float gradx = (vright - vleft) / 0.5f;
-            float grady = (vbottom - vtop) / 0.5f;
-            float divergence = gradx + grady;
-            totalerror += std::abs(divergence);
-        }
-    }
-    const float displayfactor = 10000.0f; // Adjust this factor to make the error more visible
-    settings.diverror = (int)(totalerror / (w * h) * displayfactor);
-    totalerror = 0.0f; // reset for next frame
-}
+//void divergenceerror()
+//{
+//    for (int y = 1; y < h - 1; y++)
+//    {
+//        for (int x = 1; x < w - 1; x++)
+//        {
+//            int i = y * w + x;
+//            float vleft = isolid(x - 1, y) ? 0.0f : velocityx[i - 1];
+//            float vright = isolid(x + 1, y) ? 0.0f : velocityx[i + 1];
+//            float vtop = isolid(x, y - 1) ? 0.0f : velocityy[i - w];
+//            float vbottom = isolid(x, y + 1) ? 0.0f : velocityy[i + w];
+//            float gradx = (vright - vleft) / 0.5f;
+//            float grady = (vbottom - vtop) / 0.5f;
+//            float divergence = gradx + grady;
+//            totalerror += std::abs(divergence);
+//        }
+//    }
+//    const float displayfactor = 10000.0f; // Adjust this factor to make the error more visible
+//    settings.diverror = (int)(totalerror / (w * h) * displayfactor);
+//    totalerror = 0.0f; // reset for next frame
+//}
 // rc
 void diffuse(float dt)
 {
@@ -329,6 +329,34 @@ void vorticityConfinement(float dt)
         }
     }
 }
+
+
+
+ReplayBuffer replay;
+
+void replayRecord(MouseSample s) {
+    if (!replay.recording) return;
+    if (replay.count < ReplayBuffer::CAP)
+        replay.samples[replay.count++] = s;
+}
+
+// call once per frame instead of reading live mouse
+MouseSample* replayTick() {
+    if (!replay.playing || replay.count == 0) return nullptr;
+    MouseSample* s = &replay.samples[replay.head];
+    replay.head = (replay.head + 1) % replay.count;
+    return s;
+}
+
+
+
+
+
+
+
+
+
+
 
 static GLuint compileShader(GLenum type, const char *src)
 {
@@ -453,6 +481,15 @@ extern "C" void restart()
     // updateframe(w, h, data.data());
 }
 
+static void dispatchInput(const MouseSample& s) {
+    settings.radiuscells = settings.radius / settings.tilesize;
+    if (s.col < 0 || s.col >= w || s.row < 0 || s.row >= h) return;
+    if (s.buttons & 1) addDensity(s.row, s.col);
+    if (s.buttons & 2) addvelocity(s.row, s.col, s.dmx, s.dmy, s.frametime);
+}
+
+
+
 int main()
 {
     // glfw: initialize and configure
@@ -515,6 +552,8 @@ int main()
     }
     glUseProgram(0);
     // -----------
+    //float mindiverror = 1000.0f;
+
     settings.w = w;
     settings.h = h;
     settings.cells = w * h;
@@ -525,6 +564,7 @@ int main()
     double lastTime = glfwGetTime();
     double fpsclock = lastTime;
     float accumulator = 0.0f;
+    //int frame = 0;
     // render loop
     while (!glfwWindowShouldClose(window))
     {
@@ -563,11 +603,24 @@ int main()
           //  dissipate(fixeddt);
           //  divergenceerror();
             accumulator -= fixeddt;
+            
+
+           
+
+            
         }
 
         // input
         // -----
+    /*    frame++;
+    if (settings.diverror < mindiverror) {
+        mindiverror = settings.diverror;
+        printf("error %3f \n sor %3f \n", mindiverror, settings.sor);
 
+    }
+    if (frame>=1000) {
+        mindiverror = settings.diverror;
+    }*/
         // render
         // ------
         glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
@@ -639,97 +692,27 @@ int main()
 void processInput(GLFWwindow *window)
 
 {
+    if (glfwGetKey(window, GLFW_KEY_K) == GLFW_PRESS) restart();
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        glfwSetWindowShouldClose(window, true);
 
-    if (glfwGetKey(window, GLFW_KEY_K) == GLFW_PRESS)
-    {
-        restart();
+    bool rmbDown = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS;
+    bool lmbDown = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
+
+    int col = (int)mousex / settings.tilesize;
+    int row = (int)(currentH - mousey) / settings.tilesize;
+    settings.radiuscells = settings.radius / settings.tilesize;
+
+    if (replay.playing) {
+        if (const MouseSample* s = replayTick())
+            dispatchInput(*s);
     }
-
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS)
-    {
-        int col = (int)mousex / settings.tilesize;
-        int row = (int)(currentH - mousey) / settings.tilesize;
-        settings.radiuscells = settings.radius / settings.tilesize;
-        if (col >= 0 && col < w && row >= 0 && row < h)
-        {
-
-            addDensity(row, col);
-            //int i = row * w + col;
-            //// float radius = 10.0f;
-
-            //for (int y = 0; y < h; y++)
-            //{
-            //    for (int x = 0; x < w; x++)
-            //    {
-            //        int idx = y * w + x;
-            //        float dx = x - col;
-            //        float dy = y - row;
-            //        float d = (dx * dx) + (dy * dy);
-            //        float dist = sqrtf(d);
-            //        //  printf("%3f\n", dist);
-            //        if (dist <= settings.radiuscells && !isolid(x, y))
-            //        {
-            //            float nx = dx / (dist + 0.001f); // normalized direction from center
-            //            float ny = dy / (dist + 0.001f);
-            //            float mousespeed = sqrtf(dmx * dmx + dmy * dmy);
-            //            // inject velocity in mouse direction
-
-            //            // velocityx[idx] += -ny * mousespeed * 0.5f;
-            //            // velocityy[idx] += nx * mousespeed * 0.5f;
-            //            density[idx] += settings.dscale * fixeddt;
-            //        }
-            //    }
-            //}
-
-            // data[i] = 1.0f;
-            /*  divergence();
-              solvePressure();
-              project();
-              advect(fixeddt);*/
-        }
-        // updateframe(w, h, data.data());
+    else if (rmbDown || lmbDown) {
+        MouseSample s{ row, col, (float)dmx, (float)-dmy, (float)frameTimeSec,
+                       (uint8_t)((rmbDown ? 1 : 0) | (lmbDown ? 2 : 0)) };
+        if (replay.recording) replayRecord(s);
+        dispatchInput(s);
     }
-    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS)
-    {
-        int col = (int)mousex / settings.tilesize;
-        int row = (int)(currentH - mousey) / settings.tilesize;
-        settings.radiuscells = settings.radius / settings.tilesize;
-        if (col >= 0 && col < w && row >= 0 && row < h)
-        {
-            addvelocity(row, col, dmx, -dmy, frameTimeSec);
-            //int i = row * w + col;
-            //// float radius = 10.0f;
-
-            //for (int y = 0; y < h; y++)
-            //{
-            //    for (int x = 0; x < w; x++)
-            //    {
-            //        int idx = y * w + x;
-            //        float dx = x - col;
-            //        float dy = y - row;
-            //        float d = (dx * dx) + (dy * dy);
-            //        float dist = sqrtf(d);
-            //        //  printf("%3f\n", dist);
-            //        if (dist <= settings.radiuscells)
-            //        {
-
-            //            float vscale = settings.vscale;
-            //            // left mouse — same fix as right
-            //            velocityx[idx] += (float)(dmx / settings.tilesize / frameTimeSec) * vscale * fixeddt;
-            //            velocityy[idx] -= (float)(dmy / settings.tilesize / frameTimeSec) * vscale * fixeddt;
-            //        }
-            //    }
-            //}
-
-            // data[i] = 1.0f;
-            /*  divergence();
-              solvePressure();
-              project();
-              advect(fixeddt);*/
-        }
-        // updateframe(w, h, data.data());
-    }
-
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 }

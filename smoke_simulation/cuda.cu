@@ -37,6 +37,8 @@ float* tempvy = nullptr;
 float* vorticity = nullptr;
 float* divergence = nullptr; //divergence
 
+float* d_diverror = nullptr;
+
 extern "C" void initcuda() {
 
 	int s = settings.w * settings.h;
@@ -50,6 +52,7 @@ extern "C" void initcuda() {
 	cudaMalloc(&tempvy, s * sizeof(float));
 	cudaMalloc(&vorticity, s * sizeof(float));
 	cudaMalloc(&divergence, s * sizeof(float));
+	cudaMalloc(&d_diverror, sizeof(float));
 	//cudaMalloc(&temppressure,  s* sizeof(float));
 
 	cudaMemset(density, 0, s * sizeof(float));
@@ -75,6 +78,7 @@ extern "C" void freecuda() {
 	cudaFree(tempvy);
 	cudaFree(vorticity);
 	cudaFree(divergence);
+	cudaFree(d_diverror);
 	//cudaFree(temppressure);
 	density = nullptr;
 	vx = nullptr;
@@ -85,6 +89,7 @@ extern "C" void freecuda() {
 	tempvy = nullptr;
 	vorticity = nullptr;
 	divergence = nullptr;
+	d_diverror = nullptr;
 	//temppressure = nullptr;
 	cudaError_t a = cudaGetLastError();
 	if (a) printf("memory free error : %s \n", cudaGetErrorString(a));
@@ -157,6 +162,7 @@ struct data {
 	float bouyancy = 0.0f;
 	float vorticity = 0.0f;
 	float vscale = 0.0f;
+	
 	float dscale = 0.0f;
 	float dt = 0.0f;
 	int w = 0;
@@ -177,6 +183,7 @@ extern "C" void copyparams() {
 	h_params.vorticity = settings.vorticity;
 	h_params.vscale = settings.vscale;
 	h_params.dscale = settings.dscale;
+	
 	h_params.dt = settings.fdt;
 	h_params.w = settings.w;
 	h_params.h = settings.h;
@@ -192,6 +199,11 @@ __device__ int issolid(int x, int y) {
 	if(x<=0 || x>=params.w-1 || y<=0 || y>=params.h-1) return 1;
 	return 0;
 }
+ int isSolid(int x, int y) {
+	if(x<=0 || x>=settings.w-1 || y<=0 || y>=settings.h-1) return 1;
+	return 0;
+}
+
 
 __global__ void dataSwap(float* data, float* data2) {
 	int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -395,7 +407,7 @@ __global__ void solvepressure1(float* pressure,float* divergence){
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
 	if (x >= params.w || y >= params.h) return;
 	int i= y * params.w + x;
-	if (i % 2 == 0)return;
+	if ((x+y) % 2 == 0)return;
 	int flowtop=issolid(x,y+1)?0:1;
 	int flowbottom=issolid(x,y-1)?0:1;
 	int flowleft=issolid(x-1,y)?0:1;
@@ -418,7 +430,7 @@ __global__ void solvepressure2(float* pressure,float* divergence){
 	int y = blockIdx.y * blockDim.y + threadIdx.y;
 	if (x >= params.w || y >= params.h) return;
 	int i= y * params.w + x;
-	if (i % 2 != 0)return;
+	if ((x+y) % 2 != 0)return;
 	int flowtop=issolid(x,y+1)?0:1;
 	int flowbottom=issolid(x,y-1)?0:1;
 	int flowleft=issolid(x-1,y)?0:1;
@@ -504,12 +516,32 @@ void inspectField(float* d_field, int n, const char* label) {
 	}
 	printf("[DEBUG] %-20s  min=%.4f  max=%.4f  nans=%d  infs=%d\n", label, mn, mx, nans, infs);
 }
+float totalerror = 0.0f;
+__global__ void divergenceerror(float* vx,float* vy,float* totalerror)
+{
+	int x = blockIdx.x * blockDim.x + threadIdx.x;
+	int y = blockIdx.y * blockDim.y + threadIdx.y;
+	if (x >= params.w || y >= params.h) return;
+			int i = y * params.w + x;
+			float vleft = issolid(x - 1, y) ? 0.0f : vx[i - 1];
+			float vright = issolid(x + 1, y) ? 0.0f : vx[i + 1];
+			float vtop = issolid(x, y - 1) ? 0.0f : vy[i - params.w];
+			float vbottom = issolid(x, y + 1) ? 0.0f : vy[i + params.w];
+			float gradx = (vright - vleft) * 0.5f;
+			float grady = (vbottom - vtop) * 0.5f;
+			float divergence = gradx + grady;
+			atomicAdd(totalerror, fabsf(divergence));
+		
+	
+	
+}
+
+
 __global__ void debugParams() {
 	if (threadIdx.x == 0 && blockIdx.x == 0)
 		printf("[PARAMS] w=%d h=%d dt=%.6f density=%.4f sor=%.4f visc=%.4f\n",
 			params.w, params.h, params.dt, params.density, params.sor, params.visc);
 }
-
 extern "C" void updatephysics() {
 	if (settings.debug) {
 		debugParams << <1, 1 >> > ();
@@ -551,7 +583,14 @@ extern "C" void updatephysics() {
 	std::swap(density, tempd);
 	
 	dissipateKernel << <grid, block >> > (density);
-	
+	cudaMemset(d_diverror, 0, sizeof(float));
+	divergenceerror << <grid, block >> > (vx, vy, d_diverror);
+	cudaDeviceSynchronize();
+	cudaMemcpy(&totalerror, d_diverror, sizeof(float), cudaMemcpyDeviceToHost);
+	const float displayfactor = 10000.0f; // Adjust this factor to make the error more visible
+	settings.diverror = (int)(totalerror / (settings.w * settings.h) * displayfactor);
+	totalerror = 0.0f; // reset for next frame
+
 
 }
 

@@ -11,12 +11,12 @@ struct param {
 	float radius = 50.0f;
 	float radiuscells = 0.0f;
 	float density = 1.0f;
-	float sor = 1.1f;
+	float sor = 1.93f;
 	float bouyancy = 0.0f;
 	float visc = 0.001f;
 	float dissipation = 0.0f;
-	float vorticity = 3.0f;
-	float vscale = 5.0f;
+	float vorticity = 1.60f;
+	float vscale = 2.0f;
 	float dscale = 3.0f;
 	float damp = 0.99f;
 
@@ -30,3 +30,20 @@ struct param {
 	int debug = 5;
 };
 extern param settings;
+
+struct MouseSample {
+	int   row, col;
+	float dmx, dmy;
+	float frametime;
+	int buttons;
+};
+
+struct ReplayBuffer {
+	static constexpr int CAP = 2048;
+	MouseSample samples[CAP];
+	int  count = 0;
+	int  head = 0;   // replay cursor
+	bool recording = false;
+	bool playing = false;
+};
+extern ReplayBuffer replay;

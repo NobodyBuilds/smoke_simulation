@@ -65,14 +65,14 @@
     <ClInclude Include="cuda.h">
       <Filter>cuda</Filter>
     </ClInclude>
-    <ClInclude Include="param.h">
-      <Filter>parameters</Filter>
-    </ClInclude>
     <ClInclude Include="ui.h">
       <Filter>ui</Filter>
     </ClInclude>
     <ClInclude Include="host.h">
       <Filter>host</Filter>
+    </ClInclude>
+    <ClInclude Include="param.h">
+      <Filter>parameters</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
