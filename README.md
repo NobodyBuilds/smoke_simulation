@@ -1,6 +1,6 @@
 # Smoke Sim
 
-A real-time 2D Eulerian fluid simulation built from scratch in C++/OpenGL, implementing the incompressible Navier-Stokes equations on a grid. Currently runs on CPU with CUDA acceleration planned.
+A real-time 2D Eulerian fluid simulation built from scratch in C++/OpenGL, implemented the incompressible Navier-Stokes equations on a grid.  runs on  CUDA .
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
@@ -56,7 +56,7 @@ The simulation solves the incompressible Navier-Stokes equations on a 2D Euleria
 | GLFW | Window and input |
 | GLAD | OpenGL loader |
 | ImGui | Runtime UI |
-| CUDA *(planned)* | GPU acceleration |
+| CUDA  | GPU acceleration |
 
 ---
 
@@ -106,7 +106,7 @@ cd smoke_sim
 ```
 Source.cpp       — main loop, input, sim orchestration
 shader.h         — inline GLSL vertex + fragment shaders
-cuda.h / .cu     — CUDA stubs (future GPU kernels)
+cuda.h / .cu     — CUDA stubs 
 param.h          — settings struct shared across files
 ui.h             — ImGui panel
 ```
